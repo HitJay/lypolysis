@@ -6,6 +6,9 @@
 *.tiff
 *.bmp
 
+# Large generated data (recomputable from analysis script)
+output/**/lipid_droplet_measurements.csv
+
 # Python
 __pycache__/
 *.pyc
