@@ -83,10 +83,11 @@ def segment_lipid_droplets(img):
     """
     Segment lipid droplets from brightfield image.
     
-    Strategy: Local background subtraction + connected component labeling.
+    Strategy: Local background subtraction + watershed splitting.
     In brightfield 10X, LDs appear as bright refractile objects above
     local background. We subtract a large-sigma Gaussian (background)
     from a small-sigma Gaussian (signal) to isolate small bright objects.
+    Then use distance-transform watershed to split merged clusters.
     """
     # Normalize to 0-1
     img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
@@ -107,8 +108,20 @@ def segment_lipid_droplets(img):
     # Fill holes in objects
     binary = ndimage.binary_fill_holes(binary)
     
-    # Label connected components
-    labels = measure.label(binary)
+    # Watershed splitting to separate touching droplets
+    # Distance transform finds center of each blob
+    distance = ndimage.distance_transform_edt(binary)
+    # Smooth distance map slightly to avoid over-fragmentation
+    distance = filters.gaussian(distance, sigma=0.8)
+    # Find local maxima as watershed seeds
+    from skimage.feature import peak_local_max
+    coords = peak_local_max(distance, min_distance=SEG_WATERSHED_DIST,
+                            labels=binary.astype(int))
+    mask = np.zeros(distance.shape, dtype=bool)
+    mask[tuple(coords.T)] = True
+    markers = measure.label(mask)
+    # Apply watershed on inverted distance
+    labels = segmentation.watershed(-distance, markers, mask=binary)
     
     return labels
 
